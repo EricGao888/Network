@@ -1,0 +1,1 @@
+gcc -o fifoser-v1 fifoser-v1.c && ./fifoser-v1

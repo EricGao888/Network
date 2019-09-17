@@ -1,0 +1,1 @@
+gcc -o fifocli-v1 fifocli-v1.c && ./fifocli-v1
