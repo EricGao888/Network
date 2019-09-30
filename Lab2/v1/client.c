@@ -1,3 +1,4 @@
+// Problem 1 Client
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -10,8 +11,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     int client_fd = 0, reader;
     struct sockaddr_in server_address;
     int server_address_len = sizeof(server_address);
@@ -29,8 +29,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-    {
+    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         printf("\n Socket creation error \n");
         return -1;
     }
@@ -44,8 +43,6 @@ int main(int argc, char* argv[])
         printf("Invalid address/ Address not supported \n");
         return -1;
     }
-
-    int n, len;
 
     sendto(client_fd, (const char *)buffer, strlen(buffer),
            MSG_CONFIRM, (const struct sockaddr *) &server_address,
