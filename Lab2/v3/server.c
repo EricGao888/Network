@@ -13,17 +13,24 @@
 #include <sys/time.h>
 #include <signal.h>
 
+int server_fd = 0, reader;
+struct sockaddr_in client_address;
+int client_address_len = sizeof(client_address);
+char buffer[1500], ack[1];
+int file_size, file_left;
+int block_size;
+int time_out;
+struct itimerval it_val;
+int header = 0;
+int flag = 3;
+
 void send_package(void);
 
 int main(int argc, char* argv[]) {
-    int server_fd = 0, reader;
-    struct sockaddr_in client_address;
-    int client_address_len = sizeof(client_address);
-    char buffer[1500], ack[1];
-    int file_size = atoi(argv[1]);
-    int block_size = atoi(argv[2]);
-    int time_out = atoi(argv[3]);
-    struct itimerval it_val;
+
+    file_size = atoi(argv[1]);
+    block_size = atoi(argv[2]);
+    time_out = atoi(argv[3]);
 
     // Set timer
     if (signal(SIGALRM, (void (*)(int)) send_package) == SIG_ERR) {
@@ -39,7 +46,7 @@ int main(int argc, char* argv[]) {
     }
 
     memset(&client_address, 0, client_address_len);
-    memset(buffer, 'a', sizeof(buffer));
+    memset(buffer, '3', sizeof(buffer));
 
     // Parse the input from cmd
     if (argc == 1)
@@ -66,37 +73,16 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    int header = 0;
-    for (int file_left = file_size; file_left > 0; file_left -= block_size) {
-        int info_size; // info = header + actual info
-
-        if (file_left > block_size) info_size = block_size + 1;
-        else {
-            info_size = file_left + 1;
-            header = 2;
-        }
-
-        buffer[0] = header;
-
-        if (sendto(server_fd, (const char *)buffer, info_size,
-               MSG_CONFIRM, (const struct sockaddr *) &client_address,
-               client_address_len) == -1) printf("Fail to send information...\n");
-
+    file_left = file_size;
+    for (file_left = file_size; file_left > 0; file_left -= block_size) {
+        send_package();
         recvfrom(server_fd, (char *)ack, 1,
                  MSG_WAITALL, (struct sockaddr *) &client_address,
                  &client_address_len);
 
         if (ack[0] != header) printf("Package Lost!\n");
-
         header ^= 1;
     }
-
-    int n;
-    n = recvfrom(server_fd, (char *)buffer, 100,
-                 MSG_WAITALL, (struct sockaddr *) &client_address,
-                 &client_address_len);
-    buffer[n] = '\0';
-    printf("Message from client: %s\n", buffer);
 
     close(server_fd);
 
@@ -104,6 +90,24 @@ int main(int argc, char* argv[]) {
 }
 
 void send_package(void) {
-    printf("Resend package...\n");
+    if (flag == 0) exit(1);
+    printf("Sending package...\n");
+    fflush(stdout);
+
+    int info_size; // info = header + actual info
+
+    if (file_left > block_size) info_size = block_size + 1;
+    else {
+        info_size = file_left + 1;
+        header = 2;
+        flag--;
+    }
+    printf("File bytes left: %d\n", file_left);
+
+    buffer[0] = header;
+
+    if (sendto(server_fd, (const char *)buffer, info_size,
+               MSG_CONFIRM, (const struct sockaddr *) &client_address,
+               client_address_len) == -1) printf("Fail to send information...\n");
     fflush(stdout);
 }

@@ -22,7 +22,8 @@ int main(int argc, char* argv[]) {
     int str_len;
     pid_t k;
     int drop_when = atoi(argv[2]);
-    int file_size;
+    int file_size, dup_size;
+    struct timeval start_time, end_time;
 
     // Initialization, avoid undefined behavior
     memset(&server_address, 0, sizeof(server_address));
@@ -61,8 +62,12 @@ int main(int argc, char* argv[]) {
     // Ready to process request
     int n;
     int cnt = 0;
-    file_size = 0;
 
+    file_size = 0;
+    dup_size = 0;
+    ack[0] = 10; // initialize with a number which is not a sequence number
+
+    gettimeofday(&start_time, 0);
     while (buffer[0] != 2) {
         cnt++;
 
@@ -70,23 +75,31 @@ int main(int argc, char* argv[]) {
                      MSG_WAITALL, (struct sockaddr *) &server_address,
                      &server_address_len);
         buffer[n] = '\0';
-        file_size += (n - 1); // exclude the header
+
+        if (ack[0] != buffer[0]) file_size += (n - 1); // exclude the header
+        else dup_size += (n - 1);
 
         ack[0] = buffer[0];
-        if (drop_when != -1 && cnt % drop_when != 0) {
+        if (drop_when == -1 || cnt % drop_when != 0) {
             if (sendto(client_fd, (const char *)ack, 1,
                        MSG_CONFIRM, (const struct sockaddr *) &server_address,
                        server_address_len) == -1) printf("Fail to send ACK!\n");
         }
     }
 
+    gettimeofday(&end_time, 0);
+    long long comp_time = ((end_time.tv_sec-start_time.tv_sec) * 1000000LL + end_time.tv_usec-start_time.tv_usec) / 1000;
 
-    // print message from server
-    printf("Size of file from server: %d\n", file_size);
+    printf("========= Closing socket... =========\n");
+    close(client_fd);
 
-    if (sendto(client_fd, (const char *)"File Received!", strlen("File Received!"),
-           MSG_CONFIRM, (const struct sockaddr *) &server_address,
-           server_address_len) == -1) printf("Fail to send information...\n");
+    // Print transmission statics
+    printf("========= Printing statics... =========\n");
+    printf("Completion time: %lld milliseconds\n", comp_time);
+    printf("Total bytes received from server: %d\n", file_size);
+    printf("Duplicate bytes received from server: %d\n", dup_size);
+    printf("Transmission speed: %.2f\n", 1.00 * file_size / (comp_time) * 1000);
+    fflush(stdout);
 
     return 0;
 }
