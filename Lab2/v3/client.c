@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
     dup_size = 0;
     ack[0] = 10; // initialize with a number which is not a sequence number
 
-    gettimeofday(&start_time, 0);
+    int flag = 0;
     while (buffer[0] != 2) {
         cnt++;
 
@@ -75,7 +75,10 @@ int main(int argc, char* argv[]) {
                      MSG_WAITALL, (struct sockaddr *) &server_address,
                      &server_address_len);
         buffer[n] = '\0';
-
+        if (flag == 0) {
+            gettimeofday(&start_time, 0);
+            flag = 1;
+        }
         if (ack[0] != buffer[0]) file_size += (n - 1); // exclude the header
         else dup_size += (n - 1);
 
@@ -88,7 +91,7 @@ int main(int argc, char* argv[]) {
     }
 
     gettimeofday(&end_time, 0);
-    long long comp_time = ((end_time.tv_sec-start_time.tv_sec) * 1000000LL + end_time.tv_usec-start_time.tv_usec) / 1000;
+    long long comp_time = ((end_time.tv_sec-start_time.tv_sec) * 1000000LL + end_time.tv_usec-start_time.tv_usec) / 1000LL;
 
     printf("========= Closing socket... =========\n");
     close(client_fd);
@@ -96,9 +99,9 @@ int main(int argc, char* argv[]) {
     // Print transmission statics
     printf("========= Printing statics... =========\n");
     printf("Completion time: %lld milliseconds\n", comp_time);
-    printf("Total bytes received from server: %d\n", file_size);
-    printf("Duplicate bytes received from server: %d\n", dup_size);
-    printf("Transmission speed: %.2f\n", 1.00 * file_size / (comp_time) * 1000);
+    printf("Total bytes received from server: %d bytes\n", file_size);
+    printf("Duplicate bytes received from server: %d bytes\n", dup_size);
+    printf("Transmission speed: %.2f bps\n", 1.00 * file_size / (comp_time) * 1000);
     fflush(stdout);
 
     return 0;

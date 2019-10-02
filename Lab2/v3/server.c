@@ -25,6 +25,8 @@ int header = 0;
 int flag = 3;
 
 void send_package(void);
+void set_timer(void);
+void cancel_timer(void);
 
 int main(int argc, char* argv[]) {
 
@@ -35,13 +37,6 @@ int main(int argc, char* argv[]) {
     // Set timer
     if (signal(SIGALRM, (void (*)(int)) send_package) == SIG_ERR) {
         perror("Unable to catch SIGALRM");
-        exit(1);
-    }
-    it_val.it_value.tv_sec = time_out / 1000000;
-    it_val.it_value.tv_usec = time_out % 1000000;
-    it_val.it_interval = it_val.it_value;
-    if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
-        perror("error calling setitimer()");
         exit(1);
     }
 
@@ -73,25 +68,30 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
+    printf("Start to send file...\n");
     file_left = file_size;
+    ack[0] = 10;
     for (file_left = file_size; file_left > 0; file_left -= block_size) {
         send_package();
-        recvfrom(server_fd, (char *)ack, 1,
-                 MSG_WAITALL, (struct sockaddr *) &client_address,
-                 &client_address_len);
-
-        if (ack[0] != header) printf("Package Lost!\n");
+        set_timer();
+        while (ack[0] != header) {
+            recvfrom(server_fd, (char *)ack, 1,
+                     MSG_WAITALL, (struct sockaddr *) &client_address,
+                     &client_address_len);
+        }
+        cancel_timer();
         header ^= 1;
     }
 
     close(server_fd);
+    printf("File successfully sent!\n");
 
     return 0;
 }
 
 void send_package(void) {
     if (flag == 0) exit(1);
-    printf("Sending package...\n");
+//    printf("Sending package...\n");
     fflush(stdout);
 
     int info_size; // info = header + actual info
@@ -102,7 +102,7 @@ void send_package(void) {
         header = 2;
         flag--;
     }
-    printf("File bytes left: %d\n", file_left);
+//    printf("File bytes left: %d\n", file_left);
 
     buffer[0] = header;
 
@@ -110,4 +110,21 @@ void send_package(void) {
                MSG_CONFIRM, (const struct sockaddr *) &client_address,
                client_address_len) == -1) printf("Fail to send information...\n");
     fflush(stdout);
+}
+
+void set_timer(void) {
+    it_val.it_value.tv_sec = time_out / 1000000;
+    it_val.it_value.tv_usec = time_out % 1000000;
+    it_val.it_interval = it_val.it_value;
+    if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
+        perror("error calling setitimer()");
+        exit(1);
+    }
+}
+
+void cancel_timer(void) {
+    if (setitimer(ITIMER_REAL, NULL, NULL) == -1) {
+        perror("error cancelling setitimer()");
+        exit(1);
+    }
 }
