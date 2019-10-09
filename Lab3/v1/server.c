@@ -20,16 +20,18 @@ int main(int argc, char const *argv[]) {
 
     srand(time(0));
 
-    int server_fd, client_fd, reader;
+    int server_fd, client_fd, fd, cnt;
     struct sockaddr_in server_address, client_address;
     int server_address_len = sizeof(server_address), client_address_len = sizeof(client_address);
     int status, str_len, block_size;
     char buffer[MAXBUFSZM];
+    char flag[1];
+    int file_size;
 
     pid_t k;
 
+    file_size = 0;
     block_size = atoi(argv[1]) < MAXBUFSZM ? atoi(argv[1]) : MAXBUFSZM;
-
 
     // Initialization, avoid undefined behavior
     memset(&server_address, 0, sizeof(server_address));
@@ -38,15 +40,11 @@ int main(int argc, char const *argv[]) {
     // Create Socket
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(atoi(argv[2]));
+    server_address.sin_addr.s_addr = INADDR_ANY;
 
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("socket failed");
         exit(EXIT_FAILURE);
-    }
-
-    if (inet_pton(AF_INET, INADDR_ANY, &server_address.sin_addr)<=0) {
-        printf("\nInvalid address/ Address not supported \n");
-        return -1;
     }
 
     // Establish Half Connection
@@ -61,19 +59,18 @@ int main(int argc, char const *argv[]) {
         return -1;
     }
 
-    printf("Local IP address is: %s\n", inet_ntoa(server_address.sin_addr));
-    printf("Local port is: %d\n", (int) ntohs(server_address.sin_port));
+
+
+//    printf("Local IP address is: %s\n", inet_ntoa(server_address.sin_addr));
+//    printf("Local port is: %d\n", (int) ntohs(server_address.sin_port));
 
     // Socket ready and listen
-    if (listen(server_fd, 5) < 0) {
+    if (listen(server_fd, 20) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
 
-
-
-//    send(new_socket , hello , strlen(hello) , 0 );
-
+    printf("Server starts...\n");
 
     // Read to process request
     while(1) {
@@ -82,21 +79,6 @@ int main(int argc, char const *argv[]) {
             exit(EXIT_FAILURE);
         }
 
-        reader = read(client_fd, buffer, sizeof(buffer));
-        // print message from client
-        printf("Message: %s\n", buffer);
-
-        // Parse arguments
-        char *arguments[strlen(buffer)];
-        char *token;
-        token = strtok(buffer, " ");
-        int idx = 0;
-        while (token != NULL) {
-            arguments[idx++] = token;
-            token = strtok(NULL, " ");
-        }
-        arguments[idx] = NULL;
-
         // Create new child process and perform system call
         k = fork();
 
@@ -104,14 +86,37 @@ int main(int argc, char const *argv[]) {
         if (k==0) {
             // Close duplicated half connection in child process
             close(server_fd);
-            // Redirect stdout to Socket, and close this duplicated full connection descriptor
-            dup2(client_fd, 1);
-            close(client_fd);
 
-            // If execution failed, terminate child
-            if(execvp(arguments[0], arguments) == -1) {
-                exit(1);
+            // Read filename from client
+            cnt = read(client_fd, buffer, sizeof(buffer));
+            printf("Filename: %s\n", buffer);
+
+            // Read from file
+            fd = open((char*)buffer, O_RDONLY);
+            if (fd == -1) {
+                flag[0] = '0';
+                write(client_fd, flag, 1);
             }
+            else {
+                cnt = read(fd, buffer, block_size);
+                if (cnt == 0) {
+                    flag[0] = '1';
+                    write(client_fd, flag, 1);
+                }
+                else {
+                    flag[0] = '2';
+                    write(client_fd, flag, 1);
+                }
+                while (cnt > 0) {
+                    file_size += cnt;
+                    write(client_fd, buffer, cnt);
+                    cnt = read(fd, buffer, block_size);
+                }
+                if (file_size != 0) printf("File size: %d bytes\n", file_size);
+            }
+            close(fd);
+            close(client_fd);
+            exit(0);
         }
         // Close original full connection descriptor, if not, client read function will be blocked
         close(client_fd);
