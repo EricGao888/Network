@@ -1,11 +1,12 @@
 initial state: state = 0
 
-A send connection request to B: state 0 -> 1
+A sends connection request to B: state 0 -> 1
+B receives connection request from A: state 0 -> 2
 
 manually block, retransmit for 3 times
 no response from B after 3 times retrans ---> print failure
 
-response from A, connection accepted: state: 1 -> 2, print success
+response from A, connection accepted: state: 1 -> 3, print success
 else, do nothing
 
 response from C, just print

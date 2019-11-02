@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <time.h>
+#include <setjmp.h>
 
 #define msg_len 50
 
@@ -20,10 +21,11 @@ int state;
 int fd;
 struct sockaddr_in local_address, remote_address, tmp_address;
 int remote_address_len, tmp_address_len, local_address_len;
-unsigned char reader[100], writer[100], buffer1[100], buffer2[100];
+unsigned char reader[100], writer[100], buffer1[100], buffer2[100], junk_buffer[100];
 unsigned int rand_num;
 int reconnect_times;
 int n;
+jmp_buf env;
 
 void initialize(uint16_t port_num);
 
@@ -62,33 +64,62 @@ int main(int argc, char* argv[]) {
     if (fcntl(fd, F_SETOWN, getpid()) < 0) printf("Failed to supervise SIGIO\n");
     if (fcntl(fd, F_SETFL, O_ASYNC) < 0) printf("Failed to enable asynchronous operation on local fd\n");
 
-    // Connect remote address
-    while (state == 0) {
-        printf("#ready: ");
-        fgets(reader, 50, stdin);
+    while (1) {
+        sigsetjmp(env, 1);
+        switch (state) {
+            case 0:
+                printf("#ready: ");
+                fgets(reader, 50, stdin);
+                // get rid of '\n'
+                reader[strlen(reader) - 1] = '\0';
+                my_connect();
+                break;
 
-        // get rid of '\n'
-        reader[strlen(reader) - 1] = '\0';
+            case 1:
+                while(state == 1);
+                break;
 
-        if (state == 0) {
-            my_connect();
-        }
+            case 2:
+                printf("#session request from: %s %d\n", inet_ntoa(tmp_address.sin_addr), (int) ntohs(tmp_address.sin_port));
+                printf("#ready: ");
+                clean(writer, sizeof(writer));
+                fgets(writer, msg_len, stdin);
+                writer[strlen(writer) - 1] = '\0';
 
-        if (state == 2) {
-            printf("Reader length: %ld\n", strlen(reader));
-            printf("YOUR MSG: %s\n", reader);
-        }
+                while (writer[0] != 'y' && writer[0] != 'n') {
+                    printf("#ready: ");
+                    fgets(writer, msg_len, stdin);
+                    writer[strlen(writer) - 1] = '\0';
+                }
 
-        // if no response from B received and retransmission not all performed yet, block here
-        while (state == 1);
-        while (state == 2) {
-            printf("Test!\n");
-            printf("your msg: ");
-            clean(writer, sizeof(writer));
-            fgets(writer, 50, stdin);
-            printf("Reader length: %ld\n", strlen(reader));
-            writer[strlen(writer) - 1] = '\0';
-            printf("YOUR MSG: %s\n", writer);
+                for (int i = 1; i <= 4; i++) {
+                    writer[i] = reader[i];
+                }
+
+                if (writer[0] == 'y') {
+                    // Update State
+                    state = 3;
+                    writer[0] = 6;
+                }
+                else if (writer[0] == 'n') {
+                    writer[0] = 7;
+                    state = 0;
+                }
+
+                sendto(fd, (const char *)writer, strlen(writer),
+                       MSG_CONFIRM, (const struct sockaddr *) &tmp_address,
+                       tmp_address_len);
+
+                clean(writer, sizeof(writer));
+                break;
+
+            case 3:
+                printf("your msg: ");
+                clean(writer, sizeof(writer));
+                fgets(writer, 50, stdin);
+                writer[strlen(writer) - 1] = '\0';
+                printf("YOUR MSG: %s\n", writer);
+                break;
         }
     }
 
@@ -118,6 +149,7 @@ void initialize(uint16_t port_num) {
 void my_connect() {
     state = 1;
 
+//    printf("%s\n", reader);
     for (int i = 0; i < strlen(reader); i++) {
         if (reader[i] == ' ') {
             strcpy(buffer2, reader + i + 1);
@@ -142,6 +174,7 @@ void my_connect() {
     // Send connection request from local to remote
     srand(time(0));
     rand_num = rand();
+    clean(writer, sizeof(writer));
     writer[0] = 5;
     for (int i = 3; i >= 0; i--) writer[i + 1] = (rand_num >> (i * 8)) & 255;
     alarm(5);
@@ -149,6 +182,7 @@ void my_connect() {
            0, (const struct sockaddr *) &remote_address,
            remote_address_len);
     reconnect_times = 0;
+//    printf("Request Sent!\n");
 }
 
 void reconnect() {
@@ -166,6 +200,7 @@ void reconnect() {
 
 void receive() {
 //    printf("Received!!!\n");
+    fflush(stdout);
     // Receive message from remote address
     // Use non-blocking fashion to perform asynchronous operation
     clean(reader, sizeof(reader));
@@ -174,48 +209,17 @@ void receive() {
                  &tmp_address_len);
     reader[n] = '\0';
 
-//    printf("Test!");
-//    printf("%u", reader[0]);
-//    fflush(stdout);
+    // Discard all packages without signals
+    while (recvfrom(fd, (char *)junk_buffer, msg_len,
+                    MSG_DONTWAIT, (struct sockaddr *) &tmp_address,
+                    &tmp_address_len) != -1);
+    clean(junk_buffer, sizeof(junk_buffer));
 
     switch (state) {
         case 0:
             if (reader[0] == 5) {
-                printf("#session request from: %s %d\n", inet_ntoa(tmp_address.sin_addr), (int) ntohs(tmp_address.sin_port));
-                printf("#ready: ");
-                clean(writer, sizeof(writer));
-                fgets(writer, msg_len, stdin);
-                writer[strlen(writer) - 1] = '\0';
-
-                while (writer[0] != 'y' && writer[0] != 'n') {
-                    printf("#ready: ");
-                    fgets(writer, msg_len, stdin);
-                    writer[strlen(writer) - 1] = '\0';
-                }
-
-                if (writer[0] == 'y') {
-                    // Update State
-                    state = 2;
-                    writer[0] = 6;
-                    printf("your msg: ");
-                    fflush(stdout);
-                }
-                else if (writer[0] == 'n') {
-                    writer[0] = 7;
-                    // state = 0;
-                    printf("#ready: ");
-                    fflush(stdout);
-                }
-
-                for (int i = 1; i <= 4; i++) {
-                    writer[i] = reader[i];
-                }
-
-                sendto(fd, (const char *)writer, strlen(writer),
-                       MSG_CONFIRM, (const struct sockaddr *) &tmp_address,
-                       tmp_address_len);
-
-                clean(reader, sizeof(reader));
+                state = 2;
+                siglongjmp(env, 0);
             }
             break;
 
@@ -238,7 +242,7 @@ void receive() {
                     if (flag == 1) {
                         alarm(0);
                         // Update State
-                        state = 2;
+                        state = 3;
                         printf("#success: %s %s\n", buffer1, buffer2);
                     }
                 }
@@ -255,11 +259,6 @@ void receive() {
             break;
     }
 
-    // Discard all packages without signals
-    while (recvfrom(fd, (char *)reader, msg_len,
-            MSG_DONTWAIT, (struct sockaddr *) &tmp_address,
-            &tmp_address_len) != -1);
-    clean(reader, sizeof(reader));
 }
 
 void clean(unsigned char arr[], int size) {
