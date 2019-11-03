@@ -1,4 +1,4 @@
-// Problem 2 Terve
+// Problem 3 Terve
 // Local: A, Target: B, Third Party: C
 #include <stdio.h>
 #include <unistd.h>
@@ -76,6 +76,10 @@ int main(int argc, char* argv[]) {
                 fgets(reader, 50, stdin);
                 // get rid of '\n'
                 reader[strlen(reader) - 1] = '\0';
+                if (reader[0] == 'Q') {
+                    printf("Exit...\n");
+                    exit(0);
+                }
                 my_connect();
                 break;
 
@@ -145,7 +149,6 @@ int main(int argc, char* argv[]) {
                 break;
         }
     }
-
 }
 
 void initialize(uint16_t port_num) {
@@ -225,9 +228,13 @@ void reconnect() {
     // Perform Heart Rate PRO
     else if (state == 3) {
         if (silence >= 3) {
-            printf("#The other party is dead in accident, session terminated...\n");
+            printf("#The other party is dead in accident, current session terminated...\n");
             fflush(stdout);
-            exit(0);
+            // Reset Heart Rate Pro
+            alarm(0);
+            silence = 0;
+            state = 0;
+            siglongjmp(env, 0);
         }
         char tmp_buffer[100];
         tmp_buffer[0] = 10;
@@ -325,7 +332,7 @@ void receive() {
                             break;
                         }
                     }
-                    // Connection established successfully
+                    // Print received message
                     if (flag == 1) {
                         // Partner is alive, reset Heart Rate PRO
                         alarm(5);
@@ -343,11 +350,15 @@ void receive() {
                             break;
                         }
                     }
-                    // Connection established successfully
+                    // Session terminated
                     if (flag == 1) {
                         printf("\n#session termination received\n");
                         fflush(stdout);
-                        exit(0);
+                        state = 0;
+                        // Reset Heart Rate PRO
+                        silence = 0;
+                        alarm(0);
+                        siglongjmp(env, 0);
                     }
                 }
                 else if (reader[0] == 10) {
