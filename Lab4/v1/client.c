@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
 int key_idx = 0;
 
@@ -47,8 +48,27 @@ int main(int argc, char* argv[]) {
     prikey = strtoul(argv[3], &ptr, 10);
 //    printf("Key: %u\n", prikey);
 
+
+    struct hostent *he;
+    struct in_addr **addr_list;
+
+    char name[50];
+    int len;
+    struct addrinfo *result;
+
+    if (gethostname(name, sizeof(name))) {
+        perror("Invalid");
+    }
+
+    he = gethostbyname(name);
+    addr_list = (struct in_addr **)he->h_addr_list;
+
+    if (getaddrinfo(name, NULL, NULL, &result)) {
+        perror("Invalid");
+    }
+
     for (int i = 3; i >= 0; i--) {
-        buffer[i] = (server_address.sin_addr.s_addr >> (8 * (3 - i))) & 255; // use the ip of server as request header to perform authentication
+        buffer[i] = ((((struct sockaddr_in *)result->ai_addr)->sin_addr).s_addr >> (8 * (3 - i))) & 255; // use the ip of server as request header to perform authentication
     }
 
     buffer[4] = '\0';

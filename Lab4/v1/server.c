@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
         // Verify Certificate
 
         for (int i = 0; i < 4; i++) {
-            if ((int)((server_address.sin_addr.s_addr >> (i * 8)) & 255) != (int)buffer[3 - i]) authentication = 0;
+            if ((int)((client_address.sin_addr.s_addr >> (i * 8)) & 255) != (int)buffer[3 - i]) authentication = 0;
         }
         if (authentication == 0) {
             printf("Client failed authentication check, request dropped!\n");
