@@ -36,7 +36,7 @@ minigopher: minigopher.o
 terve: terve.o
 	gcc -o terve terve.o
 
-supergopher.o: supergopher.c
+supergopher.o: supergopher.c supergopher.h
 	gcc -c supergopher.c
 
 minigopher.o: minigopher.c

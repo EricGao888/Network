@@ -301,7 +301,7 @@ void receive() {
                     alarm(0);
                     int tmp_rand = 0;
                     for (int i = 4; i >= 1; i--) {
-                        tmp_rand = (reader[i] << ((i - 1) * 8)) | tmp_rand; // Bug, random num is inverted!
+                        tmp_rand = (reader[i] << ((i - 1) * 8)) | tmp_rand; // There is a bug here, random number is inverted!
                     }
                     rand_num = rand_num > tmp_rand ? rand_num : tmp_rand;
                     state = 3;

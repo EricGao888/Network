@@ -11,7 +11,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-int fd = 0;
+int fd = 0, n;
 struct sockaddr_in super_address, server_address;
 socklen_t super_address_len;
 char buffer[100];
@@ -71,9 +71,10 @@ int main(int argc, char* argv[]) {
         printf("Connection rejected!\n");
     }
     else {
-        port_num = buffer[2];
-        port_num = port_num | (buffer[1] << 8);
-        printf("Assigned transit-port is: %hu\n", ntohs(server_address.sin_port));
+        port_num = 0;
+        port_num = ((unsigned char)buffer[2] | port_num);
+        port_num = (((unsigned char)buffer[1] << 8) | port_num);
+        printf("Assigned transit-port is: %hu\n", ntohs(port_num));
     }
 
     close(fd);
