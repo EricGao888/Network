@@ -188,7 +188,6 @@ int main(int argc, char* argv[]) {
                                    0, (const struct sockaddr *) &client_address,
                                    client_address_len) < 0) printf("Fail to send message!\n");
                     }
-                    break;
                 }
             }
         }
